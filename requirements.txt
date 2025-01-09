@@ -1,0 +1,8 @@
+sentence-transformers
+hdbscan
+numpy
+scikit-learn
+umap-learn
+plotly>=5.18.0
+pandas 
+openai 
