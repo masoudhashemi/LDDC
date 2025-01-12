@@ -19,7 +19,6 @@ def main():
         "Deep learning revolutionizes AI",
         "The weather is nice today",
         "It's a sunny day outside",
-        "Rain is expected tomorrow",
         "Snow is expected today",
         "Python is a great programming language",
         "I love coding in Python",
@@ -35,18 +34,22 @@ def main():
     llm_client = LLMClient()
     clusterer = TextClustererSplit(llm_client, similarity_threshold=0.3)
 
-    # Perform clustering
-    labels = clusterer.fit_transform(embeddings, texts)
+    # initial clustering
+    initial_labels = clusterer.fit_transform(embeddings, texts)
+    # Print results
+    print("\nInitial Clustering Results:")
+    for text, label in zip(texts, initial_labels):
+        print(f"Text: {text:<50} Cluster: {label}")
+
+    refined_labels = clusterer.refine_clusters(texts, max_iterations=2)
+    print("\nRefined Clustering Results:")
+    for text, label in zip(texts, refined_labels):
+        print(f"Text: {text:<50} Cluster: {label}")
 
     # Visualize clusters
     visualizer = ClusterVisualizer()
-    visualizer.visualize_clusters(embeddings, labels, texts=texts)
+    visualizer.visualize_clusters(embeddings, refined_labels, texts=texts)
     visualizer.show()
-
-    # Print results
-    print("\nClustering Results:")
-    for text, label in zip(texts, labels):
-        print(f"Text: {text:<50} Cluster: {label}")
 
 
 if __name__ == "__main__":
