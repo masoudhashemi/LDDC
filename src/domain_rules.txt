@@ -1,4 +1,3 @@
-# Domain-specific rules for text clustering
 - 'snow' refers to an LLM model, not weather. Texts about snow should be placed in machine learning/AI-related clusters.
 - When comparing texts, focus on the underlying concept rather than surface-level word matches.
 - Technical terms should be interpreted in their most relevant domain context.

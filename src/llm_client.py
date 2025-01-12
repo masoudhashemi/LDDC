@@ -90,7 +90,7 @@ yes, if they are in the same cluster, no otherwise:
 
         prompt = f"""We have a cluster of texts. Please provide a short, structured summary describing
 the core topics or concepts that best represent the texts in this cluster.
-Identify broad rules or key concepts that the cluster covers.
+Identify broad rules or key concepts that the cluster covers. Avoid using names, details, or specific examples.
 
 Cluster texts (sample up to 10 entries):
 - {joined_texts}
@@ -111,19 +111,24 @@ Rules:
         Ask the LLM if an outlier text belongs to the cluster described by `cluster_summary`.
         """
         domain_knowledge = f"Important domain-specific knowledge:\n{self.domain_rules}\n\n" if self.domain_rules else ""
-        prompt = f"""We have an outlier text that was not originally placed in any cluster.
-Check if the text fits the following cluster summary.
-
-Cluster summary: "{cluster_summary}"
-Outlier text: "{outlier_text}"
+        prompt = f"""Considering the following cluster summary and domain-specific knowledge, check if the text can be a member of a cluster with the given summary.
 
 Domain-specific knowledge that MUST be considered:
 {domain_knowledge}
 
-Answer yes or no: does this text clearly belong to the cluster described above?
+Cluster summary: "{cluster_summary}"
+Text: "{outlier_text}"
+
+Does the text belong to the cluster?
+
+Format your response as:
+
+- Core topic/concept: <core topic of the outlier text (be cautious about domain-specific knowledge)>
+- Answer: <yes/no>
 """
         response = self.client.chat.completions.create(
             model=self.model, messages=[{"role": "user", "content": prompt}], temperature=0.1, max_tokens=100
         )
-        decision_text = response.choices[0].message.content.strip()
-        return "yes" in decision_text
+        decision_text = response.choices[0].message.content.strip().lower()
+        print(f"Decision text: {decision_text}")
+        return "yes" in decision_text.split("answer:")[1].strip()
