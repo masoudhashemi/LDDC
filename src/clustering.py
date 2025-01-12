@@ -1,3 +1,5 @@
+from typing import Dict
+
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -13,14 +15,17 @@ class TextClustererSplit:
     ensuring it can be refined later.
     """
 
-    def __init__(self, llm_client, similarity_threshold=0.8):
+    DEFAULT_CONFIG = {"similarity_threshold": 0.8, "max_iterations": 2, "max_sample_texts": 10}
+
+    def __init__(self, llm_client, config: Dict = None):
         """
         Args:
             llm_client (LLMClient): The LLM client for checks & summarization
-            similarity_threshold (float): The cosine similarity threshold to consider two points as neighbors before LLM check.
+            config (Dict): Configuration options for clustering
         """
+        self.config = {**self.DEFAULT_CONFIG, **(config or {})}
+        self.similarity_threshold = self.config["similarity_threshold"]
         self.llm_client = llm_client
-        self.similarity_threshold = similarity_threshold
         self.checked_pairs = {}  # cache text pairs -> 'yes'/'no'
         self.labels_ = None
 
@@ -103,7 +108,7 @@ class TextClustererSplit:
         self.labels_ = labels
         return labels
 
-    def refine_clusters(self, texts, max_iterations=2):
+    def refine_clusters(self, texts, max_iterations=None):
         """
         Iteratively:
         1) Summarize each cluster using LLM
@@ -116,6 +121,8 @@ class TextClustererSplit:
 
         Updates self.labels_ in-place and returns it.
         """
+        max_iterations = self.DEFAULT_CONFIG["max_iterations"] if max_iterations is None else max_iterations
+
         if self.labels_ is None:
             raise ValueError("Must call fit_transform before refine_clusters.")
 

@@ -25,6 +25,7 @@ def main():
         "Programming is fun",
         "Machine learning uses deep neural networks",
     ]
+    DEFAULT_CONFIG = {"similarity_threshold": 0.5, "max_iterations": 2, "max_sample_texts": 10}
 
     # Get embeddings
     embedder = TextEmbedder()
@@ -32,7 +33,7 @@ def main():
 
     # Initialize LLM client and clusterer
     llm_client = LLMClient()
-    clusterer = TextClustererSplit(llm_client, similarity_threshold=0.3)
+    clusterer = TextClustererSplit(llm_client, config=DEFAULT_CONFIG)
 
     # initial clustering
     initial_labels = clusterer.fit_transform(embeddings, texts)
