@@ -36,7 +36,6 @@ First identify the core topic/concept, then check if the texts discuss the same 
 Text 1: "{text1}"
 Text 2: "{text2}"
 
-Domain-specific knowledge that MUST be considered:
 {domain_knowledge}
 
 Response format -- provide the core topic of the two texts and finish with 'Answer: <yes/no>' 
@@ -111,19 +110,18 @@ Rules:
         Ask the LLM if an outlier text belongs to the cluster described by `cluster_summary`.
         """
         domain_knowledge = f"Important domain-specific knowledge:\n{self.domain_rules}\n\n" if self.domain_rules else ""
-        prompt = f"""Considering the following cluster summary and domain-specific knowledge, check if the text can be a member of a cluster with the given summary.
+        prompt = f"""Considering the following cluster summary and domain-specific knowledge, check if the given text can be a member of the cluster.
 
-Domain-specific knowledge that MUST be considered:
 {domain_knowledge}
 
 Cluster summary: "{cluster_summary}"
 Text: "{outlier_text}"
 
-Does the text belong to the cluster?
+Does the text can belong to this cluster, considering the cluster summary and domain-specific knowledge?
 
 Format your response as:
 
-- Core topic/concept: <core topic of the outlier text (be cautious about domain-specific knowledge)>
+- Core topic/concept: <core topic of the outlier text, using domain-specific knowledge>
 - Answer: <yes/no>
 """
         response = self.client.chat.completions.create(
