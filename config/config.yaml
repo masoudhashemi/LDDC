@@ -5,8 +5,8 @@ model:
 
 # File paths
 paths:
-  domain_rules: "src/domain_rules.txt"
-  prompts: "src/prompts/clustering.yaml"
+  domain_rules: "domain_rules/domain_rules.txt"
+  prompts: "prompts/clustering.yaml"
 
 # Clustering parameters
 clustering:
