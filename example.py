@@ -42,14 +42,29 @@ def main():
     for text, label in zip(texts, initial_labels):
         print(f"Text: {text:<50} Cluster: {label}")
 
-    refined_labels = clusterer.refine_clusters(texts, max_iterations=2)
-    print("\nRefined Clustering Results:")
-    for text, label in zip(texts, refined_labels):
-        print(f"Text: {text:<50} Cluster: {label}")
+    # Refine clusters
+    refined_labels = clusterer.refine_clusters(texts)
 
-    # Visualize clusters
+    # Perform hierarchical clustering
+    hierarchy_levels = clusterer.hierarchical_clustering(texts)
+
+    # Print hierarchical results
+    for level, labels in hierarchy_levels.items():
+        print(f"\nHierarchy Level {level}:")
+        for text, label in zip(texts, labels):
+            print(f"Text: {text:<50} Cluster: {label}")
+
+        # Print cluster summaries for this level
+        summaries = clusterer.cluster_summaries
+        print("\nCluster Summaries:")
+        for cluster_id, summary in summaries.items():
+            if cluster_id in set(labels):
+                print(f"\nCluster {cluster_id}:")
+                print(summary)
+
+    # Visualize final level
     visualizer = ClusterVisualizer()
-    visualizer.visualize_clusters(embeddings, refined_labels, texts=texts)
+    visualizer.visualize_clusters(embeddings, list(hierarchy_levels.values())[-1], texts=texts)
     visualizer.show()
 
 

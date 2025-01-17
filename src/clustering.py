@@ -15,7 +15,13 @@ class TextClustererSplit:
     ensuring it can be refined later.
     """
 
-    DEFAULT_CONFIG = {"similarity_threshold": 0.8, "max_iterations": 2, "max_sample_texts": 10}
+    DEFAULT_CONFIG = {
+        "similarity_threshold": 0.8,
+        "max_iterations": 2,
+        "max_sample_texts": 10,
+        "hierarchical_iterations": 3,  # New parameter for hierarchical clustering
+        "min_cluster_size": 2,  # Minimum size for considering cluster merging
+    }
 
     def __init__(self, llm_client, config: Dict = None):
         """
@@ -28,6 +34,8 @@ class TextClustererSplit:
         self.llm_client = llm_client
         self.checked_pairs = {}  # cache text pairs -> 'yes'/'no'
         self.labels_ = None
+        self.cluster_summaries = {}  # Store cluster summaries
+        self.cluster_hierarchies = {}  # Store hierarchical relationships
 
     def fit_transform(self, embeddings, texts):
         """
@@ -197,3 +205,74 @@ class TextClustererSplit:
 
         self.labels_ = labels
         return labels
+
+    def summarize_clusters(self, texts):
+        """Summarize all current clusters."""
+        clustered_texts = self._get_clustered_texts(texts)
+        for c_id, c_members in clustered_texts.items():
+            cluster_text_list = [txt for (_, txt) in c_members]
+            summary_text = self.llm_client.summarize_cluster(cluster_text_list)
+            self.cluster_summaries[c_id] = summary_text
+        return self.cluster_summaries
+
+    def hierarchical_clustering(self, texts):
+        """
+        Perform hierarchical clustering by iteratively combining clusters based on their summaries.
+        """
+        if self.labels_ is None:
+            raise ValueError("Must call fit_transform before hierarchical_clustering")
+
+        # Initial clustering and summaries
+        current_labels = self.labels_.copy()
+        hierarchy_levels = {0: current_labels.copy()}
+
+        for level in range(self.config["hierarchical_iterations"]):
+            # Get summaries for current clusters
+            cluster_summaries = self.summarize_clusters(texts)
+
+            # Skip if we have only one cluster
+            unique_clusters = set(current_labels[current_labels != -1])
+            if len(unique_clusters) <= 1:
+                break
+
+            # Compare each pair of cluster summaries
+            merged_clusters = set()
+            new_labels = current_labels.copy()
+            cluster_pairs = [(c1, c2) for c1 in unique_clusters for c2 in unique_clusters if c1 < c2]
+
+            for c1, c2 in cluster_pairs:
+                if c1 in merged_clusters or c2 in merged_clusters:
+                    continue
+
+                # Use LLM to check if clusters should be merged based on their summaries
+                should_merge = self.llm_client.cluster_assignment_decision(cluster_summaries[c1], cluster_summaries[c2])
+
+                if should_merge:
+                    # Merge clusters by updating labels
+                    new_labels[new_labels == c2] = c1
+                    merged_clusters.add(c2)
+
+                    # Update hierarchy relationships
+                    self.cluster_hierarchies.setdefault(level + 1, {}).setdefault(c1, []).append(c2)
+
+            # Relabel clusters to be consecutive
+            unique_new_labels = sorted(set(new_labels[new_labels != -1]))
+            label_map = {old: new for new, old in enumerate(unique_new_labels)}
+            current_labels = np.array([label_map.get(l, -1) for l in new_labels])
+
+            # Store this level's clustering
+            hierarchy_levels[level + 1] = current_labels.copy()
+
+            if len(merged_clusters) == 0:
+                print(f"No more clusters merged at level {level + 1}")
+                break
+
+        return hierarchy_levels
+
+    def _get_clustered_texts(self, texts):
+        """Utility function to gather cluster memberships."""
+        clustered = {}
+        for i, lbl in enumerate(self.labels_):
+            if lbl != -1:
+                clustered.setdefault(lbl, []).append((i, texts[i]))
+        return clustered

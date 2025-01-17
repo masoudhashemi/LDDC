@@ -1,0 +1,55 @@
+similarity_check: |
+  Compare these two texts and determine if they belong to the same cluster.
+  Texts are in the same cluster only if they discuss the same core topic/concept. 
+  First identify the core topic/concept, then check if the texts discuss the same topic/concept.
+
+  Text 1: "{text1}"
+  Text 2: "{text2}"
+
+  {domain_knowledge}
+
+  Response format -- provide the core topic of the two texts and finish with 'Answer: <yes/no>' 
+  yes, if they are in the same cluster, no otherwise:
+
+  - Core topic/concept:
+      - text 1: <core topic of text 1>
+      - text 2: <core topic of text 2>
+  - Answer: <yes/no>
+
+cluster_summary: |
+  {domain_knowledge}Analyze these related texts and provide a structured summary of the core concepts,
+  patterns, and hypotheses that emerge. Consider domain-specific knowledge in your analysis.
+
+  Cluster texts:
+  - {joined_texts}
+
+  Format your response as:
+
+  Core Concepts:
+  - <key concept 1>
+  - <key concept 2>
+
+  Patterns:
+  - <observed pattern 1>
+  - <observed pattern 2>
+
+  Hypotheses:
+  - <potential hypothesis 1>
+  - <potential hypothesis 2>
+
+  Summary: <concise summary of the cluster's theme>
+
+cluster_assignment: |
+  Considering the following cluster summary and domain-specific knowledge, check if the given text can be a member of the cluster.
+
+  {domain_knowledge}
+
+  Cluster summary: "{cluster_summary}"
+  Text: "{outlier_text}"
+
+  Does the text can belong to this cluster, considering the cluster summary and domain-specific knowledge?
+
+  Format your response as:
+
+  - Core topic/concept: <core topic of the outlier text, using domain-specific knowledge>
+  - Answer: <yes/no>

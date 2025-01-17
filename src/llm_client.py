@@ -1,16 +1,22 @@
 import os
 from typing import Dict, List, Optional, Tuple
 
+import yaml
 from openai import OpenAI
 
 
 class LLMClient:
     def __init__(
-        self, api_key: Optional[str] = None, model: str = "gpt-4o-mini", rules_file: str = "src/domain_rules.txt"
+        self,
+        api_key: Optional[str] = None,
+        model: str = "gpt-4o-mini",
+        rules_file: str = "src/domain_rules.txt",
+        prompts_file: str = "src/prompts/clustering.yaml",
     ):
         self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
         self.model = model
         self.domain_rules = self._load_rules(rules_file)
+        self.prompts = self._load_prompts(prompts_file)
         print(f"Loaded domain rules: {self.domain_rules}")
 
     def _load_rules(self, rules_file: str) -> str:
@@ -24,29 +30,21 @@ class LLMClient:
             print(f"Warning: Could not load rules file: {e}")
             return ""
 
+    def _load_prompts(self, prompts_file: str) -> Dict[str, str]:
+        """Load prompts from YAML file."""
+        try:
+            with open(prompts_file, "r") as f:
+                return yaml.safe_load(f)
+        except Exception as e:
+            print(f"Warning: Could not load prompts file: {e}")
+            return {}
+
     def check_similarity_prompt(self, text1, text2):
         """
         Creates a prompt to ask the LLM: do these two texts belong to the same cluster?
         """
         domain_knowledge = f"Important domain-specific knowledge:\n{self.domain_rules}\n\n" if self.domain_rules else ""
-        prompt = f"""Compare these two texts and determine if they belong to the same cluster.
-Texts are in the same cluster only if they discuss the same core topic/concept. 
-First identify the core topic/concept, then check if the texts discuss the same topic/concept.
-
-Text 1: "{text1}"
-Text 2: "{text2}"
-
-{domain_knowledge}
-
-Response format -- provide the core topic of the two texts and finish with 'Answer: <yes/no>' 
-yes, if they are in the same cluster, no otherwise:
-
-- Core topic/concept:
-    - text 1: <core topic of text 1>
-    - text 2: <core topic of text 2>
-- Answer: <yes/no>
-"""
-        return prompt
+        return self.prompts["similarity_check"].format(text1=text1, text2=text2, domain_knowledge=domain_knowledge)
 
     def check_similarity(self, text1: str, text2: str) -> str:
         """
@@ -78,7 +76,7 @@ yes, if they are in the same cluster, no otherwise:
 
     def summarize_cluster(self, cluster_texts: List[str]) -> str:
         """
-        Use the LLM to create a 'summary' or 'rule' describing the cluster's overall topic.
+        Enhanced cluster summarization that focuses on conceptual patterns and hypotheses.
         """
         if not cluster_texts:
             raise ValueError("Cannot summarize empty cluster")
@@ -87,21 +85,12 @@ yes, if they are in the same cluster, no otherwise:
         sample_texts = cluster_texts[:10]
         joined_texts = "\n- ".join(sample_texts)
 
-        prompt = f"""We have a cluster of texts. Please provide a short, structured summary describing
-the core topics or concepts that best represent the texts in this cluster.
-Identify broad rules or key concepts that the cluster covers. Avoid using names, details, or specific examples.
+        domain_knowledge = f"Domain-specific rules:\n{self.domain_rules}\n\n" if self.domain_rules else ""
 
-Cluster texts (sample up to 10 entries):
-- {joined_texts}
+        prompt = self.prompts["cluster_summary"].format(domain_knowledge=domain_knowledge, joined_texts=joined_texts)
 
-Format your response as:
-
-Summary: <a short phrase describing the cluster>
-Rules:
-- <optional bullet points or constraints>
-"""
         response = self.client.chat.completions.create(
-            model=self.model, messages=[{"role": "user", "content": prompt}], temperature=0.1, max_tokens=100
+            model=self.model, messages=[{"role": "user", "content": prompt}], temperature=0.1, max_tokens=200
         )
         return response.choices[0].message.content.strip()
 
@@ -110,20 +99,10 @@ Rules:
         Ask the LLM if an outlier text belongs to the cluster described by `cluster_summary`.
         """
         domain_knowledge = f"Important domain-specific knowledge:\n{self.domain_rules}\n\n" if self.domain_rules else ""
-        prompt = f"""Considering the following cluster summary and domain-specific knowledge, check if the given text can be a member of the cluster.
+        prompt = self.prompts["cluster_assignment"].format(
+            domain_knowledge=domain_knowledge, cluster_summary=cluster_summary, outlier_text=outlier_text
+        )
 
-{domain_knowledge}
-
-Cluster summary: "{cluster_summary}"
-Text: "{outlier_text}"
-
-Does the text can belong to this cluster, considering the cluster summary and domain-specific knowledge?
-
-Format your response as:
-
-- Core topic/concept: <core topic of the outlier text, using domain-specific knowledge>
-- Answer: <yes/no>
-"""
         response = self.client.chat.completions.create(
             model=self.model, messages=[{"role": "user", "content": prompt}], temperature=0.1, max_tokens=100
         )
