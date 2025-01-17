@@ -19,8 +19,8 @@ class TextClustererSplit:
         "similarity_threshold": 0.8,
         "max_iterations": 2,
         "max_sample_texts": 10,
-        "hierarchical_iterations": 3,  # New parameter for hierarchical clustering
-        "min_cluster_size": 2,  # Minimum size for considering cluster merging
+        "hierarchical_iterations": 3,
+        "min_cluster_size": 2,
     }
 
     def __init__(self, llm_client, config: Dict = None):
@@ -29,13 +29,13 @@ class TextClustererSplit:
             llm_client (LLMClient): The LLM client for checks & summarization
             config (Dict): Configuration options for clustering
         """
-        self.config = {**self.DEFAULT_CONFIG, **(config or {})}
+        self.config = config if config else self.DEFAULT_CONFIG
         self.similarity_threshold = self.config["similarity_threshold"]
         self.llm_client = llm_client
-        self.checked_pairs = {}  # cache text pairs -> 'yes'/'no'
+        self.checked_pairs = {}
         self.labels_ = None
-        self.cluster_summaries = {}  # Store cluster summaries
-        self.cluster_hierarchies = {}  # Store hierarchical relationships
+        self.cluster_summaries = {}
+        self.cluster_hierarchies = {}
 
     def fit_transform(self, embeddings, texts):
         """
@@ -52,15 +52,22 @@ class TextClustererSplit:
             self.labels_ = np.array([])
             return self.labels_
 
+        print(f"\nStarting clustering with similarity threshold: {self.similarity_threshold}")
+
         sim_matrix = cosine_similarity(embeddings)
         approved_edges = [[] for _ in range(n_samples)]
 
-        # 1) Collect candidate edges (i < j to avoid duplicates).
+        # 1) Collect candidate edges (i < j to avoid duplicates)
         candidate_pairs = []
         for i in range(n_samples):
             for j in range(i + 1, n_samples):
-                if sim_matrix[i, j] >= self.similarity_threshold:
+                similarity = sim_matrix[i, j]
+                print(f"\nEmbedding similarity between texts {i} and {j}: {similarity:.3f}")
+                if similarity >= self.similarity_threshold:
                     candidate_pairs.append((i, j))
+                    print(f"Added as candidate pair")
+
+        print(f"\nFound {len(candidate_pairs)} candidate pairs")
 
         # 2) Check each candidate pair with LLM
         for i, j in candidate_pairs:
@@ -69,20 +76,21 @@ class TextClustererSplit:
                 llm_response = self.llm_client.check_similarity(texts[i], texts[j])
                 decision = self.llm_client.extract_answer(llm_response)
                 self.checked_pairs[pair_key] = decision
-                # Debug: comment out if not needed
-                print(f"Text A: {texts[i]}")
-                print(f"Text B: {texts[j]}")
-                print(f"LLM Decision: {decision}")
-
+                print(f"\nPair ({i}, {j}) - LLM Decision: {decision}")
             else:
                 decision = self.checked_pairs[pair_key]
+                print(f"\nPair ({i}, {j}) - Cached Decision: {decision}")
 
             if decision == "yes":
                 approved_edges[i].append(j)
                 approved_edges[j].append(i)
-            else:
-                # if LLM says 'no', do nothing (i.e., no edge)
-                pass
+                print(f"Added edge between {i} and {j}")
+
+        # Print approved edges
+        print("\nApproved edges:")
+        for i, edges in enumerate(approved_edges):
+            if edges:
+                print(f"Node {i} connected to: {edges}")
 
         # 3) Build connected components from approved_edges
         labels = np.full(n_samples, -1, dtype=int)
@@ -122,12 +130,6 @@ class TextClustererSplit:
         1) Summarize each cluster using LLM
         2) Try to assign outliers to the best-fitting cluster based on summary
         3) Re-summarize if you add new points, and repeat
-
-        Args:
-            texts (List[str]): The same list of texts used in fit_transform
-            max_iterations (int): how many times to iterate the refinement
-
-        Updates self.labels_ in-place and returns it.
         """
         max_iterations = self.DEFAULT_CONFIG["max_iterations"] if max_iterations is None else max_iterations
 
@@ -152,15 +154,22 @@ class TextClustererSplit:
         clustered_texts = get_clustered_texts(labels, texts)
         outliers = get_outliers(labels, texts)
 
+        print("\nStarting cluster refinement:")
+        print(f"Initial clusters: {clustered_texts}")
+        print(f"Initial outliers: {outliers}")
+
         # Summaries stored as {cluster_id: summary_text}
         cluster_summaries = {}
 
         for iteration in range(max_iterations):
+            print(f"\nIteration {iteration + 1}:")
+
             # 1) Summarize each cluster
             for c_id, c_members in clustered_texts.items():
                 cluster_text_list = [txt for (_, txt) in c_members]
                 summary_text = self.llm_client.summarize_cluster(cluster_text_list)
                 cluster_summaries[c_id] = summary_text
+                print(f"\nCluster {c_id} Summary: {summary_text}")
 
             if not outliers:
                 print("No outliers to process. Stopping refinement.")
@@ -171,24 +180,27 @@ class TextClustererSplit:
             still_outliers_next = []
 
             for idx_out, text_o in outliers:
-
-                print("current outlier: ", text_o)
+                print(f"\nProcessing outlier: {text_o}")
 
                 assigned_cluster = None
 
                 # Check each cluster's summary
                 for c_id, summary in cluster_summaries.items():
-                    assignement_decision = self.llm_client.cluster_assignment_decision(text_o, summary)
-                    print("assignement_decision: ", assignement_decision)
-                    print("summary: ", summary)
-                    if assignement_decision:
+                    print(f"\nChecking against cluster {c_id}")
+                    print(f"Cluster summary: {summary}")
+                    assignment_decision = self.llm_client.cluster_assignment_decision(text_o, summary)
+                    print(f"Assignment decision: {assignment_decision}")
+
+                    if assignment_decision:
                         assigned_cluster = c_id
                         break
 
                 if assigned_cluster is not None:
                     newly_assigned.append((idx_out, text_o, assigned_cluster))
+                    print(f"Assigned to cluster {assigned_cluster}")
                 else:
                     still_outliers_next.append((idx_out, text_o))
+                    print("Remained as outlier")
 
             if not newly_assigned:
                 print("No new outliers were assigned in iteration", iteration)
@@ -196,12 +208,13 @@ class TextClustererSplit:
 
             # Merge newly assigned
             for idx_out, text_o, c_id in newly_assigned:
-                # Add to cluster
                 clustered_texts[c_id].append((idx_out, text_o))
                 labels[idx_out] = c_id
 
             outliers = still_outliers_next
-            print(f"Iteration {iteration}: assigned {len(newly_assigned)} outliers.")
+            print(f"\nIteration {iteration} results:")
+            print(f"Newly assigned: {newly_assigned}")
+            print(f"Remaining outliers: {outliers}")
 
         self.labels_ = labels
         return labels

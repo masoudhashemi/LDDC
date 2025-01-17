@@ -1,0 +1,17 @@
+# Model settings
+model:
+  name: "gpt-4o-mini"
+  api_key: null  # Will use environment variable if null
+
+# File paths
+paths:
+  domain_rules: "src/domain_rules.txt"
+  prompts: "src/prompts/clustering.yaml"
+
+# Clustering parameters
+clustering:
+  similarity_threshold: 0.5
+  max_iterations: 2
+  max_sample_texts: 10
+  hierarchical_iterations: 3
+  min_cluster_size: 2 

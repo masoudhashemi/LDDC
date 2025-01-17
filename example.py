@@ -1,15 +1,25 @@
 import os
 
+import yaml
+
 from src.clustering import TextClustererSplit
 from src.embeddings import TextEmbedder
 from src.llm_client import LLMClient
 from src.visualizer import ClusterVisualizer
 
 
+def load_config(config_path: str = "config/config.yaml") -> dict:
+    with open(config_path, "r") as f:
+        return yaml.safe_load(f)
+
+
 def main():
+    # Load configuration
+    config = load_config()
+
     # Ensure you have set your OpenAI API key
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Please set your OPENAI_API_KEY environment variable")
+    if not os.getenv("OPENAI_API_KEY") and not config["model"]["api_key"]:
+        print("Please set your OPENAI_API_KEY environment variable or in config.yaml")
         return
 
     # Sample texts
@@ -25,15 +35,14 @@ def main():
         "Programming is fun",
         "Machine learning uses deep neural networks",
     ]
-    DEFAULT_CONFIG = {"similarity_threshold": 0.5, "max_iterations": 2, "max_sample_texts": 10}
 
     # Get embeddings
     embedder = TextEmbedder()
     embeddings = embedder.get_embeddings(texts)
 
     # Initialize LLM client and clusterer
-    llm_client = LLMClient()
-    clusterer = TextClustererSplit(llm_client, config=DEFAULT_CONFIG)
+    llm_client = LLMClient(config)
+    clusterer = TextClustererSplit(llm_client, config=config["clustering"])
 
     # initial clustering
     initial_labels = clusterer.fit_transform(embeddings, texts)

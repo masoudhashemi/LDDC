@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 
 import yaml
 from openai import OpenAI
@@ -8,15 +8,12 @@ from openai import OpenAI
 class LLMClient:
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: str = "gpt-4o-mini",
-        rules_file: str = "src/domain_rules.txt",
-        prompts_file: str = "src/prompts/clustering.yaml",
+        config: Dict,
     ):
-        self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
-        self.model = model
-        self.domain_rules = self._load_rules(rules_file)
-        self.prompts = self._load_prompts(prompts_file)
+        self.client = OpenAI(api_key=config["model"].get("api_key") or os.getenv("OPENAI_API_KEY"))
+        self.model = config["model"]["name"]
+        self.domain_rules = self._load_rules(config["paths"]["domain_rules"])
+        self.prompts = self._load_prompts(config["paths"]["prompts"])
         print(f"Loaded domain rules: {self.domain_rules}")
 
     def _load_rules(self, rules_file: str) -> str:
@@ -54,10 +51,17 @@ class LLMClient:
             str: the raw response text from the LLM, containing 'Answer: yes' or 'Answer: no'
         """
         prompt = self.check_similarity_prompt(text1, text2)
+        print("\nSimilarity Check:")
+        print(f"Text 1: {text1}")
+        print(f"Text 2: {text2}")
+        print(f"Prompt: {prompt}")
+
         response = self.client.chat.completions.create(
             model=self.model, messages=[{"role": "user", "content": prompt}], temperature=0.1, max_tokens=100
         )
-        return response.choices[0].message.content.strip().lower()
+        result = response.choices[0].message.content.strip().lower()
+        print(f"LLM Response: {result}")
+        return result
 
     def extract_answer(self, llm_response):
         """
@@ -69,9 +73,14 @@ class LLMClient:
             answer_part = lower_resp.split("answer:")[1].strip()
             # Just in case there's extra punctuation
             if "yes" in answer_part:
-                return "yes"
+                answer = "yes"
             elif "no" in answer_part:
-                return "no"
+                answer = "no"
+            else:
+                answer = "no"
+            print(f"Extracted answer: {answer}")
+            return answer
+        print("No 'Answer:' found in response, defaulting to 'no'")
         return "no"
 
     def summarize_cluster(self, cluster_texts: List[str]) -> str:
